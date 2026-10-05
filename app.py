@@ -1,6 +1,8 @@
 """Read-only LeeA client dashboard, scoped to the Architech Systems tenant."""
 import hmac
 import os
+from datetime import datetime, timedelta, timezone
+import re
 
 import psycopg2
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
@@ -68,6 +70,93 @@ def tenant_id(cursor):
     return row[0] if row else None
 
 
+@app.post("/api/contacts")
+def save_contact():
+    if not configured() or not session.get("authenticated"):
+        return jsonify(error="Sila log masuk dahulu."), 401
+    data = request.get_json(silent=True) or {}
+    phone = str(data.get("phone", "")).strip()
+    name = str(data.get("name", "")).strip()
+    if not re.fullmatch(r"\+?[0-9]{5,50}", phone) or not name or len(name) > 150:
+        return jsonify(error="Nombor atau nama tidak sah."), 400
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        return jsonify(error="Pangkalan data belum dikonfigurasi."), 503
+    try:
+        with psycopg2.connect(url, connect_timeout=5) as conn:
+            with conn.cursor() as cursor:
+                client_id = tenant_id(cursor)
+                if client_id is None:
+                    return jsonify(error="Rekod LeeA belum tersedia."), 503
+                cursor.execute("SELECT 1 FROM messages WHERE client_id = %s AND prospect_phone = %s LIMIT 1",
+                               (client_id, phone))
+                if cursor.fetchone() is None:
+                    return jsonify(error="Prospek belum mempunyai perbualan."), 404
+                cursor.execute("""INSERT INTO prospect_contacts (client_id, phone, name, source)
+                    VALUES (%s, %s, %s, 'manual') ON CONFLICT (client_id, phone)
+                    DO UPDATE SET name = EXCLUDED.name, source = 'manual', updated_at = NOW()""",
+                    (client_id, phone, name))
+        return jsonify(phone=phone, name=name, source="manual")
+    except psycopg2.Error:
+        app.logger.exception("Gagal menyimpan phone book")
+        return jsonify(error="Phone book tidak tersedia. Semak migrasi database."), 503
+
+
+@app.get("/api/analytics")
+def analytics():
+    """Read-only WhatsApp activity derived from this tenant's stored messages."""
+    if not configured() or not session.get("authenticated"):
+        return jsonify(error="Sila log masuk dahulu."), 401
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        return jsonify(error="Pangkalan data belum dikonfigurasi."), 503
+    try:
+        with psycopg2.connect(url, connect_timeout=5) as conn:
+            with conn.cursor() as cursor:
+                client_id = tenant_id(cursor)
+                if client_id is None:
+                    return jsonify(error="Rekod LeeA belum tersedia."), 503
+                cursor.execute(
+                    "SELECT prospect_phone, sender, timestamp FROM messages "
+                    "WHERE client_id = %s AND prospect_phone IS NOT NULL "
+                    "AND prospect_phone <> '' ORDER BY id",
+                    (client_id,),
+                )
+                rows = cursor.fetchall()
+    except psycopg2.Error:
+        app.logger.exception("Gagal membaca analisis WhatsApp")
+        return jsonify(error="Analisis WhatsApp tidak tersedia."), 503
+
+    today = datetime.now(timezone.utc).date()
+    start = today - timedelta(days=6)
+    days = { (start + timedelta(days=i)).isoformat(): 0 for i in range(7) }
+    prospects = {}
+    inbound = outbound = active = 0
+    for phone, sender, timestamp in rows:
+        item = prospects.setdefault(phone, {"phone": phone, "incoming": 0,
+                                            "replies": 0, "last_activity": ""})
+        if sender == phone:
+            inbound += 1
+            item["incoming"] += 1
+        else:
+            outbound += 1
+            item["replies"] += 1
+        if timestamp:
+            moment = timestamp.replace(tzinfo=timezone.utc) if timestamp.tzinfo is None else timestamp
+            date = moment.astimezone(timezone.utc).date().isoformat()
+            if date in days:
+                days[date] += 1
+                active += 1
+            value = moment.isoformat()
+            if value > item["last_activity"]:
+                item["last_activity"] = value
+    top = sorted(prospects.values(), key=lambda item: (-item["incoming"], item["phone"]))[:10]
+    return jsonify(prospects=len(prospects), incoming=inbound, replies=outbound,
+                   messages_7d=active, daily=[{"date": day, "messages": count}
+                                              for day, count in days.items()], top_leads=top,
+                   as_of=datetime.now(timezone.utc).isoformat())
+
+
 @app.get("/api/chat-ticket")
 def chat_ticket():
     if not configured() or not session.get("authenticated"):
@@ -95,12 +184,16 @@ def leads():
                 if client_id is None:
                     return jsonify(error="Rekod LeeA belum tersedia."), 503
                 cursor.execute(
-                    "SELECT prospect_phone, MAX(id) FROM messages "
+                    "SELECT recent.prospect_phone, contact.name, contact.source FROM "
+                    "(SELECT prospect_phone, MAX(id) AS last_id FROM messages "
                     "WHERE client_id = %s AND prospect_phone IS NOT NULL "
-                    "GROUP BY prospect_phone ORDER BY MAX(id) DESC LIMIT 200",
-                    (client_id,),
+                    "GROUP BY prospect_phone ORDER BY last_id DESC LIMIT 200) recent "
+                    "LEFT JOIN prospect_contacts contact ON contact.client_id = %s "
+                    "AND contact.phone = recent.prospect_phone ORDER BY recent.last_id DESC",
+                    (client_id, client_id),
                 )
-                return jsonify([{"phone": phone} for phone, _ in cursor.fetchall()])
+                return jsonify([{"phone": phone, "name": name or "", "source": source or ""}
+                                for phone, name, source in cursor.fetchall()])
     except psycopg2.Error:
         app.logger.exception("Gagal membaca senarai prospek")
         return jsonify(error="Senarai prospek tidak tersedia."), 503
