@@ -8,9 +8,11 @@ Query
 sentiasa menapis `clients.username = 'architechsystems'` dan `messages.client_id`
 yang sepadan. `CLI-1001` ialah rujukan perniagaan, bukan primary key PostgreSQL.
 
-Tetapkan `DATABASE_URL` (rujukan Railway Postgres jika di Railway),
-`PORTAL_PASSWORD` yang kuat, dan `SECRET_KEY` rawak yang panjang dalam variables
-deployment. Jangan commit nilai sebenar. Portal dan bot perlu mengakses database
+Tetapkan `DATABASE_URL` (rujukan Railway Postgres jika di Railway) dan `SECRET_KEY`
+rawak yang panjang dalam variables deployment. Login hanya memerlukan kata laluan:
+jika `PORTAL_PASSWORD` tidak ditetapkan, lalainya `defaultpass123`. Untuk produksi,
+tetapkan `PORTAL_PASSWORD` yang kuat sebagai ganti nilai lalai. Jangan commit nilai
+sebenar. Portal dan bot perlu mengakses database
 Postgres yang sama; jika portal di Vercel, alamat Postgres dalaman Railway tidak
 boleh dicapai dari Vercel. Gunakan sambungan selamat yang sesuai atau hos portal
 di rangkaian Railway. Aplikasi ini tidak memuatkan `.env` secara automatik.

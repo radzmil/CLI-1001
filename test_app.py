@@ -23,6 +23,16 @@ class PortalTest(unittest.TestCase):
         self.assertEqual(self.client.get("/").status_code, 200)
         self.assertNotIn(b"/api/leads", self.client.get("/").data)
 
+    def test_default_password_when_not_configured(self):
+        with patch.dict(os.environ, {"PORTAL_PASSWORD": ""}):
+            self.assertEqual(self.client.post("/login", data={"password": "wrong"}).status_code, 401)
+            self.assertEqual(self.client.post("/login", data={"password": "defaultpass123"}).status_code, 302)
+            self.assertIn(b"Dashboard LeeA", self.client.get("/").data)
+
+    def test_explicit_password_overrides_default(self):
+        self.assertEqual(self.client.post("/login", data={"password": "defaultpass123"}).status_code, 401)
+        self.assertEqual(self.client.post("/login", data={"password": "test-only"}).status_code, 302)
+
     def test_login_and_tenant_scoped_queries(self):
         self.assertEqual(self.client.post("/login", data={"password": "bad"}).status_code, 401)
         self.assertEqual(self.client.post("/login", data={"password": "test-only"}).status_code, 302)
