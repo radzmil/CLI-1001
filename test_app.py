@@ -32,6 +32,18 @@ class PortalTest(unittest.TestCase):
         self.assertEqual(self.client.get("/").status_code, 200)
         self.assertNotIn(b"/api/leads", self.client.get("/").data)
 
+    def test_deployment_identity_is_rendered_without_changing_tenant_scope(self):
+        with patch.dict(os.environ, {"CLIENT_NAME": "Syarikat Demo", "CLIENT_CODE": "CLI-1007",
+                                  "CLIENT_LOGO_URL": "https://example.org/logo.png"}):
+            page = self.client.get("/").data.decode("utf-8")
+            self.assertIn("Syarikat Demo", page)
+            self.assertIn("CLI-1007", page)
+            self.assertIn("https://example.org/logo.png", page)
+            self.login()
+            dashboard = self.client.get("/").data.decode("utf-8")
+            self.assertIn("Syarikat Demo", dashboard)
+            self.assertIn("CLI-1007", dashboard)
+
     def test_dashboard_has_categorized_navigation_and_panels(self):
         self.login()
         html = self.client.get("/").data.decode("utf-8")

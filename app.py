@@ -1,4 +1,4 @@
-"""LeeA client dashboard, scoped to the Architech Systems tenant."""
+"""LeeA client dashboard, scoped to the configured tenant."""
 import hmac
 import os
 from datetime import datetime, timedelta, timezone
@@ -13,7 +13,14 @@ app.secret_key = os.environ.get("SECRET_KEY", "")
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
                   SESSION_COOKIE_SECURE=os.environ.get("LOCAL_HTTP") != "1")
 
-TENANT = "architechsystems"
+TENANT = os.environ.get("CLIENT_USERNAME", "architechsystems").strip()
+
+
+def client_context():
+    """Deployment-specific identity; database primary keys are never business IDs."""
+    return {"client_name": os.environ.get("CLIENT_NAME", "").strip() or TENANT,
+            "client_code": os.environ.get("CLIENT_CODE", "CLI-1001").strip(),
+            "client_logo": os.environ.get("CLIENT_LOGO_URL", "").strip() or "/static/logo.png"}
 
 
 @app.after_request
@@ -39,35 +46,35 @@ def configured():
 @app.get("/")
 def index():
     if not configured():
-        return render_template("login.html", error="Konfigurasi keselamatan portal belum lengkap."), 503
+        return render_template("login.html", error="Konfigurasi keselamatan portal belum lengkap.", **client_context()), 503
     if not authenticated():
-        return render_template("login.html")
-    return render_template("dashboard.html")
+        return render_template("login.html", **client_context())
+    return render_template("dashboard.html", **client_context())
 
 
 @app.post("/login")
 def login():
     session.clear()
     if not configured():
-        return render_template("login.html", error="Konfigurasi keselamatan portal belum lengkap."), 503
+        return render_template("login.html", error="Konfigurasi keselamatan portal belum lengkap.", **client_context()), 503
     password = os.environ.get("PORTAL_PASSWORD", "")
     if not password:
-        return render_template("login.html", error="Kata laluan portal belum dikonfigurasi."), 503
+        return render_template("login.html", error="Kata laluan portal belum dikonfigurasi.", **client_context()), 503
     if (request.form.get("username", "").strip() != TENANT or
             not hmac.compare_digest(request.form.get("password", ""), password)):
-        return render_template("login.html", error="Maklumat log masuk tidak tepat."), 401
+        return render_template("login.html", error="Maklumat log masuk tidak tepat.", **client_context()), 401
     url = os.environ.get("DATABASE_URL")
     if not url:
-        return render_template("login.html", error="Pangkalan data belum dikonfigurasi."), 503
+        return render_template("login.html", error="Pangkalan data belum dikonfigurasi.", **client_context()), 503
     try:
         with psycopg2.connect(url, connect_timeout=5) as conn:
             with conn.cursor() as cursor:
                 client_id = tenant_id(cursor)
     except psycopg2.Error:
         app.logger.exception("Gagal mengesahkan tenant portal")
-        return render_template("login.html", error="Pangkalan data tidak tersedia."), 503
+        return render_template("login.html", error="Pangkalan data tidak tersedia.", **client_context()), 503
     if client_id is None:
-        return render_template("login.html", error="Rekod klien tidak tersedia."), 503
+        return render_template("login.html", error="Rekod klien tidak tersedia.", **client_context()), 503
     session.clear()
     session["authenticated"] = True
     session["client_id"] = client_id
