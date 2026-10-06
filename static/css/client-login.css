@@ -1,0 +1,16 @@
+/* Match the client dashboard palette without changing the login form contract. */
+.login-page{background:#080f1d;color:#ecf5ff}
+.login-layout{border-color:#29405b;background:#101a2d}
+.login-intro{background:radial-gradient(circle at 68% 68%,#174665,#101a2d 65%);border-color:#29405b}
+.login-intro:after{background:linear-gradient(125deg,#55bdf40d,transparent 50%)}
+.system-visual{background:radial-gradient(circle at center,#55bdf429,transparent 62%)}
+.system-visual:before,.system-visual:after{border-color:#55bdf44d}
+.visual-node{background:#55bdf4;box-shadow:0 0 15px #55bdf4}
+.login-card{background:#101a2d}
+.login-page .eyebrow,.login-page .intro-footer{color:#55bdf4}
+.login-page .intro-content em{color:#55bdf4}
+.login-page input{background:#0a1324;border-color:#29405b;color:#edf5ff}
+.login-page input:focus-visible,.login-page button:focus-visible{outline:2px solid #42c8fa;outline-offset:2px}
+.login-page button[type=submit]{background:#126897;color:#fff}
+.login-page button[type=submit]:hover{background:#167eaf}
+@media(max-width:700px){.login-page{padding:12px}.login-layout{width:100%;min-height:0;margin:0;grid-template-columns:minmax(0,1fr)}.login-intro{padding:20px}.intro-content{margin:14px 0}.intro-content h2{font-size:clamp(1.8rem,8vw,2.6rem);margin:8px 0}.intro-content p{margin:0}.system-visual{display:none}.login-card{padding:24px}.login-card-inner{max-width:none}.login-page input{font-size:16px}.login-page button[type=submit]{min-height:48px}}

@@ -51,3 +51,10 @@ body:has(.shell),.shell{background:#080f1d;color:#e9f2ff}
 .chat-mode-controls button{min-height:44px}
 .chat-mode-controls button[data-mode="human"]{background:#13745f!important;border-color:#229d7b!important}
 @media(max-width:850px){.chat-panel .chat-layout{grid-template-columns:minmax(0,1fr)}.chat-panel .chat-layout .card{min-height:0}.chat-panel #leads{max-height:240px}.chat-panel #messages{min-height:380px;max-height:65vh}}
+.human-reply[hidden]{display:none}
+.human-reply{border-top:1px solid #2b435d;padding-top:14px;display:grid;gap:10px}
+.human-reply label{margin:0;font-weight:600}
+.human-reply textarea{resize:vertical;min-height:72px}
+.human-reply button{justify-self:start;min-height:44px}
+.human-reply small{line-height:1.5}
+@media(max-width:700px){.chat-panel #messages{min-height:180px;max-height:38vh}.human-reply button{width:100%}.chat-panel .chat-layout{gap:12px}}

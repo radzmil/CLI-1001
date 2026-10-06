@@ -3,6 +3,7 @@ const profileTrigger = $('user-logo');
 const profileDropdown = $('user-dropdown');
 const mobileNavToggle = $('mobile-nav-toggle');
 const mobileNavigation = $('mobile-navigation');
+const humanReply = $('human-reply');
 function closeMobileNavigation() {
   mobileNavigation.classList.remove('open');
   mobileNavToggle.setAttribute('aria-expanded', 'false');
@@ -62,7 +63,7 @@ function activateTab() {
   });
   $('page-title').textContent = titles[active];
   if ($('current-tab')) $('current-tab').textContent = titles[active];
-  $('page-description').textContent = active === 'control-center' ? 'Aktiviti mesej sebenar daripada pangkalan data Architech Systems.' : titles[active] + ' · Architech Systems';
+  $('page-description').textContent = active === 'control-center' ? 'Aktiviti mesej sebenar daripada pangkalan data klien.' : titles[active] + ' · Portal klien';
   $('refresh').hidden = !['control-center', 'phonebook'].includes(active);
   if (active === 'control-center') refresh();
   if (active === 'phonebook') renderContacts();
@@ -94,7 +95,7 @@ function renderLeads() {
     add(info, 'span', lead.name || 'Nama belum disimpan', 'lead-name');
     add(info, 'span', lead.phone, 'lead-phone');
     button.type = 'button';
-    button.onclick = () => { selected = lead.phone; $('contact-selected').textContent = lead.phone; contactName.disabled = false; saveName.disabled = false; contactName.value = lead.name || ''; $('contact-status').textContent = ''; renderLeads(); loadHistory(); loadChatMode(); };
+    button.onclick = () => { selected = lead.phone; humanReply.hidden = true; $('human-message').value = ''; $('contact-selected').textContent = lead.phone; contactName.disabled = false; saveName.disabled = false; contactName.value = lead.name || ''; $('contact-status').textContent = ''; renderLeads(); loadHistory(); loadChatMode(); };
   }
 }
 function renderContacts() {
@@ -128,14 +129,16 @@ async function loadChatMode() {
   const phone = selected;
   const button = $('takeover');
   button.disabled = true;
+  humanReply.hidden = true;
   $('chat-mode-status').textContent = 'Menyemak mod perbualan...';
   try {
     const data = await api('/api/chat-mode?phone=' + encodeURIComponent(phone));
     if (selected !== phone) return;
     button.dataset.mode = data.mode;
+    humanReply.hidden = data.mode !== 'human';
     button.textContent = data.mode === 'human' ? 'Serah semula kepada AI' : 'Ambil alih · Human Touch';
     $('chat-mode-status').textContent = data.mode === 'human'
-      ? 'Human Touch aktif · bot tidak membalas automatik. Balas melalui saluran WhatsApp yang disambungkan.'
+      ? 'Human Touch aktif · bot tidak membalas automatik. Balas menggunakan nombor WhatsApp Business yang disambungkan.'
       : 'AI aktif · bot membalas secara automatik.';
     button.disabled = false;
   } catch (error) {
@@ -158,6 +161,13 @@ $('takeover').onclick = async () => {
     if (selected === phone) { $('chat-mode-status').textContent = error.message; button.disabled = false; }
   }
 };
+humanReply.addEventListener('submit', event => {
+  event.preventDefault();
+  const message = $('human-message').value.trim();
+  const phone = selected.replace(/\D/g, '');
+  if (!message || !phone || humanReply.hidden) return;
+  window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(message), '_blank', 'noopener,noreferrer');
+});
 let activityChart;
 function renderActivity(days) {
   const wrapper = $('daily-activity');
@@ -296,7 +306,7 @@ async function connectChat() {
       if (event.data === 'refresh') { refresh(); return; }
       try {
         const notification = JSON.parse(event.data);
-        if (notification.type === 'chat_changed' && notification.client_id === 'architechsystems') refresh();
+        if (notification.type === 'chat_changed') refresh();
       } catch (_) { /* Ignore heartbeat and malformed notifications. */ }
     };
     current.onerror = () => current.close();
