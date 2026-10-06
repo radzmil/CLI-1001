@@ -252,7 +252,7 @@ def analytics():
             if value > item["last_activity"]:
                 item["last_activity"] = value
     top = sorted(prospects.values(), key=lambda item: (-item["incoming"], item["phone"]))[:10]
-    return jsonify(prospects=len(prospects), incoming=inbound, replies=outbound,
+    return jsonify(source="messages", prospects=len(prospects), incoming=inbound, replies=outbound,
                    messages_7d=active, daily=[{"date": day, "messages": count}
                                               for day, count in days.items()], top_leads=top,
                    as_of=datetime.now(timezone.utc).isoformat())

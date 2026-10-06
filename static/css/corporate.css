@@ -1,0 +1,96 @@
+/* Portal-specific corporate presentation. Loaded after the legacy styles. */
+body:has(.shell){background:#f5f7fa;color:#17263d;font-size:14px;line-height:1.5}
+.shell{background:#f5f7fa;min-height:100vh}
+.shell .portal-sidebar{width:244px;background:#14243a;border-right:1px solid #233a54;color:#e9f0f8}
+.sidebar-brand{min-height:102px;padding:22px 20px;gap:12px;border-bottom:1px solid #31445b}
+.sidebar-brand h2{color:#fff;font-size:15px;line-height:1.25;letter-spacing:-.01em}
+.sidebar-brand p{font-size:11px;line-height:1.4;color:#adbdce;letter-spacing:0}
+.sidebar-brand .company-logo{width:40px;height:40px}
+.category-label{color:#91a6bb;font-size:10px;font-weight:700;letter-spacing:.12em;padding:0 20px 8px}
+.shell .sidebar{padding:18px 0}.nav-category{margin-bottom:20px}
+.shell .sidebar .nav-item{min-height:43px;padding:11px 20px;border-left:3px solid transparent;color:#c2cede;font-size:13px;font-weight:500}
+.shell .sidebar .nav-item:hover{background:#203750;color:#fff}
+.shell .sidebar .nav-item.active{background:#25415f;color:#fff;border-left-color:#78a9e7;font-weight:650}
+.sidebar-bottom{border-top:1px solid #31445b;padding:20px}
+.sidebar-caption{color:#91a6bb}.sidebar-bottom .secondary{width:100%;background:#203750;border:1px solid #3c5670;color:#fff;text-align:left}
+.mobile-nav-toggle{display:none}
+.shell main{max-width:none;min-width:0;padding:0 36px 48px}
+.shell .top-header{min-height:112px;margin-bottom:28px;padding:24px 0 20px;background:#f5f7fa;border-bottom:1px solid #dce3eb;backdrop-filter:none}
+.header-breadcrumb{color:#65748a;font-size:12px}.header-breadcrumb span:last-child{color:#263d57}
+.top-header h1{color:#14243a;font-size:27px;font-weight:700;letter-spacing:-.035em;margin:4px 0}
+.top-header p{color:#65748a;font-size:13px;margin:0}
+.shell button:not(.lead):not(.logo-trigger):not(.logout-link){border-radius:6px}
+.shell button:hover:not(:disabled){transform:none}
+.shell button:focus-visible,.shell a:focus-visible,.shell input:focus-visible,.shell textarea:focus-visible{outline:2px solid #2264a7;outline-offset:2px}
+.shell main button:not(.lead){background:#204b78;color:#fff;border:1px solid #204b78;font-weight:600}
+.shell main button:not(.lead):hover:not(:disabled){background:#163b61}
+.shell main button.secondary{background:#fff;color:#204b78;border:1px solid #cbd7e4}
+.shell main button.secondary:hover:not(:disabled){background:#edf3f9}
+.shell main input,.shell main textarea{background:#fff;border:1px solid #cbd7e4;border-radius:6px;color:#17263d;padding:10px 12px}
+.shell main input::placeholder,.shell main textarea::placeholder{color:#718097}
+.shell main label{color:#354a64}
+.shell main h2,.shell main h3{color:#17263d;letter-spacing:-.015em}
+.shell main p,.shell main small{color:#63748a}
+.shell .card{background:#fff;border:1px solid #dce3eb;border-radius:8px;box-shadow:0 1px 2px rgba(23,38,61,.04);padding:22px}
+.shell .card:hover{border-color:#dce3eb}
+.control-heading{margin-bottom:16px}.control-heading h2{font-size:17px;margin-bottom:3px}.control-heading p{font-size:12px}
+.stats-grid{gap:14px;margin-bottom:24px}
+.shell .stat-card{min-height:132px;display:flex;flex-direction:column;justify-content:center;gap:12px}
+.stat-card:before{display:none}.shell .stat-card:hover{transform:none;box-shadow:0 1px 2px rgba(23,38,61,.04);border-color:#dce3eb}
+.stat-value{order:2;color:#14243a;font-size:30px;line-height:1;margin:0;font-weight:700;letter-spacing:-.04em}
+.stat-label{order:1;color:#64748b;font-size:11px;letter-spacing:.055em;font-weight:650}
+.two-column{grid-template-columns:minmax(320px,.9fr) minmax(0,1.5fr);gap:20px}
+.analytics-panel h2,.chat-panel>h2{font-size:16px;margin-bottom:18px}
+.analytics-panel h2:not(:first-child){border-top:1px solid #e5eaf0;padding-top:22px;margin-top:20px}
+.chart-container{height:260px}.chat-panel .chat-layout{grid-template-columns:minmax(210px,.85fr) minmax(260px,1.25fr);gap:14px}
+.chat-panel .chat-layout .card{min-height:370px}.chat-panel>.card{margin-top:14px}
+.shell .lead-card{width:100%;background:#fff;border:1px solid #e0e7ee;border-radius:6px;padding:11px;margin:8px 0;color:#17263d;text-align:left}
+.shell .lead-card:hover,.shell .lead-card.selected{background:#edf4fb;border-color:#a9c5e3}
+.lead-avatar{background:#dceafa;color:#234a73;border-radius:6px;font-size:12px}
+.lead-name{color:#17263d}.lead-phone{color:#64748b}
+.bubble{background:#f1f5f9;border:1px solid #e0e7ee;box-shadow:none;color:#17263d}
+.bubble.outgoing{background:#e5f0fa;border-color:#cbddeb;color:#17263d}
+.shell .user-dropdown{background:#fff;border:1px solid #dce3eb;color:#17263d;box-shadow:0 12px 32px rgba(23,38,61,.15)}
+.user-dropdown a,.user-dropdown .logout-link{color:#17263d}.user-dropdown a:hover,.user-dropdown .logout-link:hover{background:#edf4fb;color:#17263d}
+.dropdown-divider{border-color:#e0e7ee}.dropdown-header small{color:#64748b}
+.shell .progress-bar{background:#e9eef4;border-color:#dce3eb}.shell .progress{background:#356d9c}
+.token-big-value,.plan-name{color:#204b78}.token-info,.usage-table td{color:#63748a}
+.subscription-card,.logo-preview{background:#f8fafc;border-color:#dce3eb}
+.usage-table th,.usage-table td{border-bottom-color:#dce3eb}
+.status-footer{margin-top:20px}.status-item strong{color:#354a64}
+.token-message-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0}
+.token-message-summary[hidden]{display:none}
+.token-message-summary>div{border:1px solid #dce3eb;border-radius:6px;padding:16px;background:#f8fafc}
+.token-message-summary span{display:block;color:#63748a;font-size:12px}
+.token-message-summary strong{display:block;color:#17263d;font-size:24px;margin-top:8px}
+@media(max-width:1200px){.two-column{grid-template-columns:1fr}.chat-panel .chat-layout{grid-template-columns:minmax(220px,.8fr) minmax(0,1.2fr)}}
+@media(max-width:900px){.shell .portal-sidebar{width:205px}.shell main{padding:0 22px 32px}.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.shell .portal-sidebar{width:100%;height:auto;position:relative}.sidebar-brand{min-height:0;padding:14px 16px}.shell .sidebar{padding:6px 12px}.shell .sidebar .nav-item{border-left:0;border-bottom:2px solid transparent;padding:10px}.shell .sidebar .nav-item.active{border-bottom-color:#78a9e7}.shell main{padding:0 16px 28px}.shell .top-header{min-height:0;padding:20px 0;margin-bottom:20px}.top-header h1{font-size:23px}.chat-panel .chat-layout{grid-template-columns:1fr}.chat-panel .chat-layout .card{min-height:0}.stats-grid{gap:10px}.shell .stat-card{min-height:104px;padding:16px}.stat-value{font-size:25px}}
+@media(max-width:600px){.token-message-summary{grid-template-columns:1fr}}
+@media(max-width:700px){
+  .shell .portal-sidebar{position:relative;z-index:50}
+  .sidebar-brand{display:flex;align-items:center;gap:10px}
+  .sidebar-brand>div:last-of-type{min-width:0;flex:1}
+  .sidebar-brand h2{font-size:13px}.sidebar-brand p{font-size:10px}
+  .shell .mobile-nav-toggle{display:block;flex:none;background:#25415f;color:#fff;border:1px solid #4b6682;border-radius:6px;padding:10px 12px;font-size:13px;min-height:44px}
+  .mobile-navigation{display:none;border-top:1px solid #31445b}
+  .mobile-navigation.open{display:block}
+  .shell .sidebar{display:block;padding:10px 0;overflow:visible}
+  .nav-category{display:block;margin:0 0 8px}.category-label{display:block;padding:10px 16px 4px}
+  .shell .sidebar .nav-item{display:block;width:100%;white-space:normal;min-height:44px;padding:12px 16px;border-bottom:0;border-left:3px solid transparent}
+  .shell .sidebar .nav-item.active{border-bottom:0;border-left-color:#78a9e7}
+  .shell .sidebar-bottom{display:block;padding:12px 16px 18px}
+  .shell main{min-width:0;width:100%;padding:0 16px 28px}
+  .shell .top-header{position:relative;display:flex;align-items:start;gap:12px;flex-wrap:wrap}
+  .shell .top-header>div{min-width:0;flex:1 1 190px}
+  .shell .top-header #refresh{min-height:44px}
+  .shell .card{padding:16px}.two-column,.chat-panel .chat-layout,.token-grid,.status-grid{grid-template-columns:minmax(0,1fr)}
+  .analytics-panel,.chat-panel,.chat-layout,.chat-layout .card,.status-item{min-width:0}
+  .chart-container{height:220px;overflow:hidden}
+  .chat-panel .chat-layout .card{min-height:0}
+  #messages{max-height:360px;overflow:auto}
+  .top-lead{flex-wrap:wrap}.top-lead small{text-align:left}
+  .settings-section,.usage-panel{max-width:100%}
+  .shell main input,.shell main textarea{font-size:16px;max-width:100%}
+}
+@media(max-width:380px){.stats-grid{grid-template-columns:1fr}.sidebar-brand .company-logo{width:32px;height:32px}}

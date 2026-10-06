@@ -1,6 +1,19 @@
 const $ = id => document.getElementById(id);
 const profileTrigger = $('user-logo');
 const profileDropdown = $('user-dropdown');
+const mobileNavToggle = $('mobile-nav-toggle');
+const mobileNavigation = $('mobile-navigation');
+function closeMobileNavigation() {
+  mobileNavigation.classList.remove('open');
+  mobileNavToggle.setAttribute('aria-expanded', 'false');
+}
+mobileNavToggle.addEventListener('click', () => {
+  const open = mobileNavigation.classList.toggle('open');
+  mobileNavToggle.setAttribute('aria-expanded', String(open));
+});
+document.querySelectorAll('.sidebar .nav-item').forEach(link => {
+  link.addEventListener('click', closeMobileNavigation);
+});
 function closeProfileMenu() {
   profileDropdown.hidden = true;
   profileTrigger.setAttribute('aria-expanded', 'false');
@@ -13,6 +26,10 @@ document.addEventListener('click', event => {
   if (!event.target.closest('.user-menu')) closeProfileMenu();
 });
 document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && mobileNavigation.classList.contains('open')) {
+    closeMobileNavigation();
+    mobileNavToggle.focus();
+  }
   if (event.key === 'Escape' && !profileDropdown.hidden) {
     closeProfileMenu();
     profileTrigger.focus();
@@ -32,6 +49,7 @@ const titles = {'control-center': 'Pusat Kawalan', phonebook: 'Phone Book', 'bot
 function activateTab() {
   const requested = location.hash.slice(1);
   const active = tabs.includes(requested) ? requested : 'control-center';
+  closeMobileNavigation();
   for (const tab of tabs) {
     const panel = $('tab-' + tab);
     panel.hidden = tab !== active;
@@ -44,10 +62,11 @@ function activateTab() {
   });
   $('page-title').textContent = titles[active];
   if ($('current-tab')) $('current-tab').textContent = titles[active];
-  $('page-description').textContent = active === 'control-center' ? 'Perbualan, analisis dan WhatsApp lead Architech Systems.' : titles[active] + ' · Architech Systems';
+  $('page-description').textContent = active === 'control-center' ? 'Aktiviti mesej sebenar daripada pangkalan data Architech Systems.' : titles[active] + ' · Architech Systems';
   $('refresh').hidden = !['control-center', 'phonebook'].includes(active);
   if (active === 'control-center') refresh();
   if (active === 'phonebook') renderContacts();
+  if (active === 'token-usage') loadTokenMessageActivity();
 }
 window.addEventListener('hashchange', activateTab);
 let leads = [], selected = '', refreshing = false;
@@ -110,7 +129,11 @@ function renderActivity(days) {
   const wrapper = $('daily-activity');
   wrapper.replaceChildren();
   if (activityChart) { activityChart.destroy(); activityChart = null; }
-  if (!days || !days.some(day => day.messages > 0)) {
+  if (!days) {
+    add(wrapper, 'div', 'Data aktiviti tidak dapat dimuatkan.', 'empty-state');
+    return;
+  }
+  if (!days.some(day => day.messages > 0)) {
     add(wrapper, 'div', 'Tiada aktiviti direkodkan. Data akan muncul apabila ada mesej masuk.', 'empty-state');
     return;
   }
@@ -130,27 +153,28 @@ function renderActivity(days) {
   canvas.setAttribute('aria-label', 'Aktiviti mesej tujuh hari: ' + days.map(day => day.date + ': ' + day.messages).join(', '));
   wrapper.appendChild(canvas);
   const gradient = canvas.getContext('2d').createLinearGradient(0, 0, 0, 260);
-  gradient.addColorStop(0, 'rgba(59,130,246,.32)');
-  gradient.addColorStop(1, 'rgba(59,130,246,0)');
+  gradient.addColorStop(0, 'rgba(32,75,120,.18)');
+  gradient.addColorStop(1, 'rgba(32,75,120,0)');
   activityChart = new Chart(canvas, {
     type: 'line',
     data: {labels: days.map(day => day.date), datasets: [{label: 'Mesej', data: days.map(day => day.messages),
-      borderColor: '#3b82f6', backgroundColor: gradient, borderWidth: 2, fill: true, tension: .4,
-      pointBackgroundColor: '#3b82f6', pointBorderColor: '#111827', pointBorderWidth: 2, pointRadius: 4, pointHoverRadius: 6}]},
+      borderColor: '#204b78', backgroundColor: gradient, borderWidth: 2, fill: true, tension: .25,
+      pointBackgroundColor: '#204b78', pointBorderColor: '#fff', pointBorderWidth: 2, pointRadius: 4, pointHoverRadius: 6}]},
     options: {responsive: true, maintainAspectRatio: false,
-      plugins: {legend: {display: false}, tooltip: {backgroundColor: '#1f2937', titleColor: '#f9fafb', bodyColor: '#9ca3af'}},
-      scales: {x: {grid: {display: false}, ticks: {color: '#9ca3af'}},
-        y: {beginAtZero: true, grid: {color: '#293244'}, ticks: {color: '#9ca3af', precision: 0}}}}
+      plugins: {legend: {display: false}, tooltip: {backgroundColor: '#17263d', titleColor: '#fff', bodyColor: '#e0e7ee'}},
+      scales: {x: {grid: {display: false}, ticks: {color: '#64748b'}},
+        y: {beginAtZero: true, grid: {color: '#e5eaf0'}, ticks: {color: '#64748b', precision: 0}}}}
   });
 }
 async function loadAnalytics() {
   try {
     const data = await api('/api/analytics');
+    if (data.source !== 'messages') throw new Error('Sumber data analisis tidak dapat disahkan.');
     $('metric-prospects').textContent = data.prospects.toLocaleString('ms-MY');
     $('metric-incoming').textContent = data.incoming.toLocaleString('ms-MY');
     $('metric-replies').textContent = data.replies.toLocaleString('ms-MY');
     $('metric-week').textContent = data.messages_7d.toLocaleString('ms-MY');
-    $('analytics-updated').textContent = 'Dikemas kini ' + new Date(data.as_of).toLocaleString('ms-MY');
+    $('analytics-updated').textContent = 'Rekod mesej · dikemas kini ' + new Date(data.as_of).toLocaleString('ms-MY');
     renderActivity(data.daily);
     const top = $('top-leads'); top.replaceChildren();
     if (!data.top_leads.length) add(top, 'p', 'Belum ada mesej prospek.');
@@ -162,13 +186,32 @@ async function loadAnalytics() {
   } catch (error) {
     $('analytics-updated').textContent = error.message;
     for (const id of ['metric-prospects', 'metric-incoming', 'metric-replies', 'metric-week']) $(id).textContent = '—';
-    renderActivity([]); $('top-leads').replaceChildren();
+    renderActivity(null); $('top-leads').replaceChildren();
+    add($('top-leads'), 'p', 'Data prospek tidak dapat dimuatkan.', 'empty-state');
+  }
+}
+async function loadTokenMessageActivity() {
+  const status = $('token-activity-status');
+  const summary = $('token-message-summary');
+  status.textContent = 'Memuatkan rekod mesej...';
+  summary.hidden = true;
+  try {
+    const data = await api('/api/analytics');
+    if (data.source !== 'messages') throw new Error('Sumber data tidak dapat disahkan.');
+    $('token-incoming').textContent = data.incoming.toLocaleString('ms-MY');
+    $('token-outgoing').textContent = data.replies.toLocaleString('ms-MY');
+    $('token-week').textContent = data.messages_7d.toLocaleString('ms-MY');
+    summary.hidden = false;
+    status.textContent = 'Rekod mesej dikemas kini ' + new Date(data.as_of).toLocaleString('ms-MY');
+  } catch (error) {
+    status.textContent = 'Rekod mesej tidak tersedia: ' + error.message;
   }
 }
 async function refresh() {
   if (refreshing) return;
   refreshing = true;
   if (!location.hash || location.hash === '#control-center') loadAnalytics();
+  if (location.hash === '#token-usage') loadTokenMessageActivity();
   try {
     leads = await api('/api/leads');
     $('notice').textContent = '';

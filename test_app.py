@@ -49,8 +49,11 @@ class PortalTest(unittest.TestCase):
         self.assertIn('class="two-column"', html)
         self.assertIn('class="status-footer card"', html)
         self.assertIn('id="daily-activity"', html)
-        self.assertIn('Data penggunaan token belum tersedia', html)
+        self.assertIn('Data penggunaan token belum disambungkan', html)
         self.assertIn('id="user-dropdown" hidden', html)
+        self.assertIn('id="mobile-nav-toggle"', html)
+        self.assertIn('aria-controls="mobile-navigation"', html)
+        self.assertIn('id="mobile-navigation"', html)
         self.assertIn('aria-controls="user-dropdown"', html)
         for target in ('company-profile', 'password-settings', 'subscription-settings'):
             self.assertIn('id="' + target + '"', html)
@@ -64,11 +67,10 @@ class PortalTest(unittest.TestCase):
         self.assertIn('<button type="submit" disabled>Simpan Perubahan</button>', html)
         self.assertNotIn('Terhubung ke Meta API', html)
         self.assertIn('class="token-grid"', html)
-        self.assertIn('aria-label="Token AI"', html)
-        self.assertIn('aria-label="Token Chat Meta"', html)
-        self.assertIn('id="daily-usage-status"', html)
-        self.assertIn('id="usage-log"', html)
-        self.assertIn('Log penggunaan token belum tersedia.', html)
+        self.assertIn('id="token-message-summary"', html)
+        self.assertIn('id="token-activity-status"', html)
+        self.assertIn('bukan penggunaan token atau caj Meta', html)
+        self.assertNotIn('id="usage-log"', html)
         for form in ('company-form', 'password-form'):
             self.assertIn('id="' + form + '"', html)
         for field in ('logo', 'display_name', 'email', 'current_password', 'new_password', 'confirm_password'):
@@ -148,6 +150,7 @@ class PortalTest(unittest.TestCase):
         with patch.object(portal.psycopg2, "connect", return_value=connection):
             response = self.client.get("/api/analytics")
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["source"], "messages")
         self.assertEqual(response.json["prospects"], 2)
         self.assertEqual(response.json["incoming"], 3)
         self.assertEqual(response.json["replies"], 1)
