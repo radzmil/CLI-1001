@@ -94,7 +94,7 @@ function renderLeads() {
     add(info, 'span', lead.name || 'Nama belum disimpan', 'lead-name');
     add(info, 'span', lead.phone, 'lead-phone');
     button.type = 'button';
-    button.onclick = () => { selected = lead.phone; $('contact-selected').textContent = lead.phone; contactName.disabled = false; saveName.disabled = false; contactName.value = lead.name || ''; $('contact-status').textContent = ''; renderLeads(); loadHistory(); };
+    button.onclick = () => { selected = lead.phone; $('contact-selected').textContent = lead.phone; contactName.disabled = false; saveName.disabled = false; contactName.value = lead.name || ''; $('contact-status').textContent = ''; renderLeads(); loadHistory(); loadChatMode(); };
   }
 }
 function renderContacts() {
@@ -124,6 +124,40 @@ async function loadHistory() {
     box.scrollTop = box.scrollHeight;
   } catch (error) { $('notice').textContent = error.message; }
 }
+async function loadChatMode() {
+  const phone = selected;
+  const button = $('takeover');
+  button.disabled = true;
+  $('chat-mode-status').textContent = 'Menyemak mod perbualan...';
+  try {
+    const data = await api('/api/chat-mode?phone=' + encodeURIComponent(phone));
+    if (selected !== phone) return;
+    button.dataset.mode = data.mode;
+    button.textContent = data.mode === 'human' ? 'Serah semula kepada AI' : 'Ambil alih · Human Touch';
+    $('chat-mode-status').textContent = data.mode === 'human'
+      ? 'Human Touch aktif · bot tidak membalas automatik. Balas melalui saluran WhatsApp yang disambungkan.'
+      : 'AI aktif · bot membalas secara automatik.';
+    button.disabled = false;
+  } catch (error) {
+    if (selected === phone) $('chat-mode-status').textContent = error.message;
+  }
+}
+$('takeover').onclick = async () => {
+  const phone = selected;
+  const button = $('takeover');
+  const mode = button.dataset.mode === 'human' ? 'ai' : 'human';
+  button.disabled = true;
+  $('chat-mode-status').textContent = 'Menyimpan mod perbualan...';
+  try {
+    const response = await fetch('/api/chat-mode', {method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify({phone, mode})});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Gagal menukar mod perbualan.');
+    if (selected === phone) await loadChatMode();
+  } catch (error) {
+    if (selected === phone) { $('chat-mode-status').textContent = error.message; button.disabled = false; }
+  }
+};
 let activityChart;
 function renderActivity(days) {
   const wrapper = $('daily-activity');

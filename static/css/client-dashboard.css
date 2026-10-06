@@ -1,0 +1,53 @@
+/* Client command centre: dark, data-first presentation. */
+body:has(.shell),.shell{background:#080f1d;color:#e9f2ff}
+.shell .portal-sidebar{background:#0d1729;border-color:#1b344e}
+.sidebar-brand,.sidebar-bottom{border-color:#20334b}
+.shell .sidebar .nav-item.active{background:#12304c;border-left-color:#31b9f4;color:#eaf8ff}
+.shell .sidebar .nav-item:hover{background:#152a42}
+.shell main{background:#080f1d}
+.shell .top-header{background:#080f1d;border-color:#1a2d45}
+.top-header h1,.shell main h2,.shell main h3{color:#ecf5ff}
+.top-header h1{letter-spacing:-.035em}
+.top-header p,.shell main p,.shell main small{color:#9aadc5}
+.header-breadcrumb,.header-breadcrumb span:last-child{color:#55bdf4}
+.shell .card{background:#101a2d;border:1px solid #1b3450;border-radius:14px;box-shadow:none}
+.shell .card:hover,.shell .stat-card:hover{border-color:#285776;box-shadow:none}
+.shell .stat-card{background:linear-gradient(145deg,#142137,#101a2d);min-height:126px}
+.stat-label{color:#9aadc5;text-transform:uppercase;letter-spacing:.09em}
+.stat-value{color:#39bcff;font-variant-numeric:tabular-nums}
+.shell main input,.shell main textarea{background:#0a1324;border:1px solid #29405b;color:#edf5ff;border-radius:8px}
+.shell main input::placeholder,.shell main textarea::placeholder{color:#8497b1}
+.shell main label{color:#b8cbe0}
+.shell main button:not(.lead){background:#126897;border-color:#2589bd;color:#fff}
+.shell main button:not(.lead):hover:not(:disabled){background:#167eaf}
+.shell main button.secondary{background:#14243a;border-color:#34536d;color:#d7edff}
+.shell main button.secondary:hover:not(:disabled){background:#1c3551}
+.shell button:focus-visible,.shell a:focus-visible,.shell input:focus-visible,.shell textarea:focus-visible{outline-color:#42c8fa}
+.analytics-panel h2:not(:first-child){border-color:#243950}
+.shell .lead{background:#14243a;color:#eef5ff;border:1px solid #263f5a}
+.shell .lead.selected{background:#153e60;border-color:#28a8e2}
+.shell .progress-bar,.subscription-card,.logo-preview,.token-message-summary>div{background:#0b1728;border-color:#29415b}
+.token-message-summary strong,.plan-name,.token-big-value{color:#39bcff}
+.usage-table th,.usage-table td{border-color:#29415b}
+.status-item strong,.token-message-summary span,.token-info,.usage-table td{color:#b8cbe0}
+.shell .mobile-nav-toggle{background:#153d5d;border-color:#35779c}
+@media(max-width:700px){.shell main{padding:0 16px 32px}.shell .top-header{border-color:#20344d}.shell .stat-card{min-height:112px}.stat-value{font-size:26px}}
+/* Give live conversations the full content width before secondary analytics. */
+.two-column{display:flex;flex-direction:column;gap:24px}
+.chat-panel{width:100%;order:0}
+.analytics-panel{width:100%;order:1}
+.chat-panel .chat-layout{display:grid;grid-template-columns:minmax(240px, .32fr) minmax(0, .68fr);gap:16px}
+.chat-panel .chat-layout .card{min-height:580px}
+.chat-panel .chat-card{display:flex;flex-direction:column;min-width:0}
+.chat-panel #messages{flex:1;min-height:340px;max-height:550px;overflow:auto;padding:14px 4px}
+.chat-panel #leads{max-height:520px;overflow:auto;margin-top:12px}
+.chat-panel .lead-card{background:#14243a;color:#eef5ff;border-color:#29435f}
+.chat-panel .lead-card:hover,.chat-panel .lead-card.selected{background:#1b3a58;border-color:#37a9e4}
+.chat-panel .lead-name{color:#eef5ff}.chat-panel .lead-phone{color:#a8bed4}
+.chat-panel .bubble{background:#182b42;color:#eef5ff;border-color:#30506c;max-width:85%;overflow-wrap:anywhere}
+.chat-panel .bubble.outgoing{background:#174665;color:#eef5ff;border-color:#287aa2}
+.chat-mode-controls{border-block:1px solid #2b435d;padding:12px 0;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.chat-mode-controls p{margin:0;flex:1 1 220px;font-size:12px}
+.chat-mode-controls button{min-height:44px}
+.chat-mode-controls button[data-mode="human"]{background:#13745f!important;border-color:#229d7b!important}
+@media(max-width:850px){.chat-panel .chat-layout{grid-template-columns:minmax(0,1fr)}.chat-panel .chat-layout .card{min-height:0}.chat-panel #leads{max-height:240px}.chat-panel #messages{min-height:380px;max-height:65vh}}

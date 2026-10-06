@@ -69,7 +69,9 @@ class PortalTest(unittest.TestCase):
         self.assertIn('class="token-grid"', html)
         self.assertIn('id="token-message-summary"', html)
         self.assertIn('id="token-activity-status"', html)
-        self.assertIn('bukan penggunaan token atau caj Meta', html)
+        self.assertIn('bukan penggunaan token Gemini atau caj Meta', html)
+        self.assertIn('Tiada kuota rasmi 1,000', html)
+        self.assertIn('Tiada kuota token percuma bulanan standard', html)
         self.assertNotIn('id="usage-log"', html)
         for form in ('company-form', 'password-form'):
             self.assertIn('id="' + form + '"', html)

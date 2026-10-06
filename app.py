@@ -1,4 +1,4 @@
-"""Read-only LeeA client dashboard, scoped to the Architech Systems tenant."""
+"""LeeA client dashboard, scoped to the Architech Systems tenant."""
 import hmac
 import os
 from datetime import datetime, timedelta, timezone
@@ -330,6 +330,48 @@ def history():
     except psycopg2.Error:
         app.logger.exception("Gagal membaca sejarah perbualan")
         return jsonify(error="Sejarah perbualan tidak tersedia."), 503
+
+
+@app.route("/api/chat-mode", methods=["GET", "POST"])
+def chat_mode():
+    if not authenticated():
+        return jsonify(error="Sila log masuk dahulu."), 401
+    data = request.get_json(silent=True) if request.method == "POST" else request.args
+    if not data or not isinstance(data.get("phone"), str):
+        return jsonify(error="Nombor prospek tidak sah."), 400
+    phone = data["phone"]
+    if not re.fullmatch(r"\+?[0-9]{5,50}", phone):
+        return jsonify(error="Nombor prospek tidak sah."), 400
+    mode = data.get("mode")
+    if request.method == "POST" and mode not in ("ai", "human"):
+        return jsonify(error="Mod perbualan tidak sah."), 400
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        return jsonify(error="Pangkalan data belum dikonfigurasi."), 503
+    try:
+        with psycopg2.connect(url, connect_timeout=5) as conn:
+            with conn.cursor() as cursor:
+                client_id = tenant_id(cursor)
+                if client_id is None or client_id != session["client_id"]:
+                    return jsonify(error="Rekod klien tidak tersedia."), 403
+                cursor.execute("SELECT 1 FROM messages WHERE client_id = %s AND prospect_phone = %s LIMIT 1",
+                               (client_id, phone))
+                if cursor.fetchone() is None:
+                    return jsonify(error="Prospek belum mempunyai perbualan."), 404
+                if request.method == "POST":
+                    cursor.execute("""INSERT INTO chat_modes (client_id, phone, mode)
+                        VALUES (%s, %s, %s) ON CONFLICT (client_id, phone)
+                        DO UPDATE SET mode = EXCLUDED.mode, updated_at = NOW()""",
+                        (client_id, phone, mode))
+                else:
+                    cursor.execute("SELECT mode FROM chat_modes WHERE client_id = %s AND phone = %s",
+                                   (client_id, phone))
+                    row = cursor.fetchone()
+                    mode = row[0] if row else "ai"
+        return jsonify(phone=phone, mode=mode)
+    except psycopg2.Error:
+        app.logger.exception("Gagal membaca atau menyimpan mod perbualan")
+        return jsonify(error="Mod perbualan tidak tersedia. Semak migrasi chat_modes."), 503
 
 
 if __name__ == "__main__":
