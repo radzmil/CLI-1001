@@ -71,6 +71,8 @@ function activateTab() {
 }
 window.addEventListener('hashchange', activateTab);
 let leads = [], selected = '', refreshing = false;
+let contactPage = 0;
+const contactsPerPage = 10;
 function add(parent, tag, content, cls = '') {
   const el = document.createElement(tag);
   el.textContent = content == null ? '' : String(content);
@@ -102,11 +104,24 @@ function renderContacts() {
   const box = $('contact-list'); box.replaceChildren();
   const term = $('contact-search').value.trim().toLowerCase();
   const matches = leads.filter(lead => (lead.phone + ' ' + lead.name).toLowerCase().includes(term));
-    if (!matches.length) add(box, 'p', 'Tiada kontak ditemui.', 'empty-state');
-  for (const lead of matches) {
-    const button = add(box, 'button', (lead.name ? lead.name + ' · ' : '') + lead.phone, 'lead' + (selected === lead.phone ? ' selected' : ''));
+  contactPage = Math.min(contactPage, Math.max(0, Math.ceil(matches.length / contactsPerPage) - 1));
+  $('contact-empty').hidden = matches.length !== 0;
+  $('contact-page').textContent = 'Halaman ' + (contactPage + 1) + ' / ' + Math.max(1, Math.ceil(matches.length / contactsPerPage));
+  $('contact-prev').disabled = contactPage === 0;
+  $('contact-next').disabled = (contactPage + 1) * contactsPerPage >= matches.length;
+  for (const lead of matches.slice(contactPage * contactsPerPage, (contactPage + 1) * contactsPerPage)) {
+    const row = add(box, 'tr', '');
+    add(row, 'td', lead.name || 'Nama belum disimpan');
+    add(row, 'td', lead.phone);
+    add(row, 'td', 'Belum tersedia');
+    add(row, 'td', 'Semak dalam chat');
+    const cell = add(row, 'td', '');
+    const button = add(cell, 'button', 'Pilih', 'secondary');
     button.type = 'button';
     button.onclick = () => { selected = lead.phone; contactName.disabled = false; saveName.disabled = false; contactName.value = lead.name || ''; $('contact-selected').textContent = lead.phone; $('contact-status').textContent = ''; renderContacts(); };
+    const chat = add(cell, 'button', 'Lihat chat', 'secondary');
+    chat.type = 'button';
+    chat.onclick = () => { selected = lead.phone; location.hash = 'control-center'; renderLeads(); loadHistory(); loadChatMode(); };
   }
 }
 async function loadHistory() {
@@ -266,7 +281,9 @@ async function refresh() {
   finally { refreshing = false; }
 }
 $('search').oninput = renderLeads;
-$('contact-search').oninput = renderContacts;
+$('contact-search').oninput = () => { contactPage = 0; renderContacts(); };
+$('contact-prev').onclick = () => { contactPage--; renderContacts(); };
+$('contact-next').onclick = () => { contactPage++; renderContacts(); };
 $('contact-form').onsubmit = async event => {
   event.preventDefault();
   if (!selected) return;

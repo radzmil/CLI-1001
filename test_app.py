@@ -1,9 +1,34 @@
 import os
 import unittest
+from html.parser import HTMLParser
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import app as portal
+
+
+class DashboardStructure(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.stack = []
+        self.panels = {}
+        self.errors = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == 'section' and attrs.get('id', '').startswith('tab-'):
+            if any(item[1] and item[1].startswith('tab-') for item in self.stack):
+                self.errors.append('Nested dashboard panels')
+            self.panels[attrs['id']] = attrs.get('hidden') is not None or 'hidden' in attrs
+        if tag not in {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+                       'link', 'meta', 'param', 'source', 'track', 'wbr'}:
+            self.stack.append((tag, attrs.get('id')))
+
+    def handle_endtag(self, tag):
+        if not self.stack or self.stack[-1][0] != tag:
+            self.errors.append('Unexpected closing tag: ' + tag)
+        else:
+            self.stack.pop()
 
 
 class PortalTest(unittest.TestCase):
@@ -53,6 +78,8 @@ class PortalTest(unittest.TestCase):
         for category in ('WORKSPACE', 'BOT &amp; AI', 'AKAUN'):
             self.assertIn(category, html)
         self.assertIn('id="contact-form"', html)
+        for marker in ('phonebook-table', 'contact-prev', 'contact-next', 'contact-empty'):
+            self.assertIn(marker, html)
         self.assertIn('id="analytics"', html)
         self.assertIn('id="whatsapp-leads"', html)
         self.assertIn('id="metric-prospects"', html)
@@ -93,6 +120,32 @@ class PortalTest(unittest.TestCase):
         self.assertIn('Plan: Belum tersedia', html)
         self.assertIn('<button type="button" disabled>Upgrade Plan</button>', html)
         self.assertNotIn('RM 130 / bulan', html)
+
+    def test_dashboard_panels_are_siblings_and_html_is_balanced(self):
+        self.login()
+        parser = DashboardStructure()
+        parser.feed(self.client.get('/').data.decode('utf-8'))
+        parser.close()
+        self.assertEqual(parser.errors, [])
+        self.assertEqual(parser.stack, [])
+        self.assertEqual(parser.panels, {
+            'tab-control-center': False, 'tab-phonebook': True,
+            'tab-bot-profile': True, 'tab-token-usage': True, 'tab-settings': True,
+        })
+
+    def test_login_layout_toggle_and_support_have_no_contact_details(self):
+        html = self.client.get('/').data.decode('utf-8')
+        for marker in ('PORTAL KLIEN', 'design-system.css', 'client-login.css',
+                       'id="toggle-password"', 'login.js', 'LIVE SUPPORT',
+                       'Hubungi admin untuk bantuan'):
+            self.assertIn(marker, html)
+        for forbidden in ('login-intro', 'wa.link', '018-317-2114', '+60 18-317 2114'):
+            self.assertNotIn(forbidden, html)
+        response = self.client.get('/static/login.js')
+        script = response.data.decode('utf-8')
+        response.close()
+        self.assertIn("passwordInput.type = visible ? 'text' : 'password'", script)
+        self.assertIn("visible ? 'eye-off' : 'eye'", script)
 
     def test_password_must_be_configured(self):
         with patch.dict(os.environ, {"PORTAL_PASSWORD": ""}):

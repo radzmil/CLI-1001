@@ -58,3 +58,4 @@ body:has(.shell),.shell{background:#080f1d;color:#e9f2ff}
 .human-reply button{justify-self:start;min-height:44px}
 .human-reply small{line-height:1.5}
 @media(max-width:700px){.chat-panel #messages{min-height:180px;max-height:38vh}.human-reply button{width:100%}.chat-panel .chat-layout{gap:12px}}
+.phonebook-scroll{overflow-x:auto}.phonebook-table{width:100%;border-collapse:collapse;min-width:680px}.phonebook-table th,.phonebook-table td{text-align:left;padding:12px;border-bottom:1px solid #29415b}.phonebook-table th{color:#9aadc5;font-size:12px}.phonebook-table td{overflow-wrap:anywhere}.phonebook-table td:last-child{white-space:nowrap}.phonebook-table td button{margin:2px;padding:7px}.phonebook-pagination{display:flex;gap:16px;align-items:center;justify-content:flex-end;margin:16px 0}.phonebook-pagination button:disabled{opacity:.5;cursor:not-allowed}
