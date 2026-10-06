@@ -14,7 +14,6 @@ app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
                   SESSION_COOKIE_SECURE=os.environ.get("LOCAL_HTTP") != "1")
 
 TENANT = "architechsystems"
-DEFAULT_PORTAL_PASSWORD = "defaultpass123"
 
 
 @app.after_request
@@ -41,20 +40,38 @@ def configured():
 def index():
     if not configured():
         return render_template("login.html", error="Konfigurasi keselamatan portal belum lengkap."), 503
-    if not session.get("authenticated"):
+    if not authenticated():
         return render_template("login.html")
     return render_template("dashboard.html")
 
 
 @app.post("/login")
 def login():
+    session.clear()
     if not configured():
         return render_template("login.html", error="Konfigurasi keselamatan portal belum lengkap."), 503
-    password = os.environ.get("PORTAL_PASSWORD") or DEFAULT_PORTAL_PASSWORD
-    if not hmac.compare_digest(request.form.get("password", ""), password):
-        return render_template("login.html", error="Kata laluan tidak tepat."), 401
+    password = os.environ.get("PORTAL_PASSWORD", "")
+    if not password:
+        return render_template("login.html", error="Kata laluan portal belum dikonfigurasi."), 503
+    if (request.form.get("username", "").strip() != TENANT or
+            not hmac.compare_digest(request.form.get("password", ""), password)):
+        return render_template("login.html", error="Maklumat log masuk tidak tepat."), 401
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        return render_template("login.html", error="Pangkalan data belum dikonfigurasi."), 503
+    try:
+        with psycopg2.connect(url, connect_timeout=5) as conn:
+            with conn.cursor() as cursor:
+                client_id = tenant_id(cursor)
+    except psycopg2.Error:
+        app.logger.exception("Gagal mengesahkan tenant portal")
+        return render_template("login.html", error="Pangkalan data tidak tersedia."), 503
+    if client_id is None:
+        return render_template("login.html", error="Rekod klien tidak tersedia."), 503
     session.clear()
     session["authenticated"] = True
+    session["client_id"] = client_id
+    session["username"] = TENANT
     return redirect(url_for("index"))
 
 
@@ -70,9 +87,93 @@ def tenant_id(cursor):
     return row[0] if row else None
 
 
+def authenticated():
+    return (configured() and session.get("authenticated") is True and
+            session.get("username") == TENANT and isinstance(session.get("client_id"), int))
+
+
+@app.route("/api/bot-profile", methods=["GET", "POST"])
+def bot_profile():
+    if not authenticated():
+        return jsonify(error="Sila log masuk dahulu."), 401
+    if request.method == "POST":
+        data = request.get_json(silent=True)
+        name = data.get("bot_name") if isinstance(data, dict) else None
+        if not isinstance(name, str) or not name.strip() or len(name.strip()) > 100:
+            return jsonify(error="Nama bot mesti antara 1 hingga 100 aksara."), 400
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        return jsonify(error="Pangkalan data belum dikonfigurasi."), 503
+    try:
+        with psycopg2.connect(url, connect_timeout=5) as conn:
+            with conn.cursor() as cursor:
+                if tenant_id(cursor) != session["client_id"]:
+                    return jsonify(error="Rekod klien tidak tersedia."), 503
+                if request.method == "POST":
+                    cursor.execute("UPDATE clients SET bot_name = %s WHERE id = %s",
+                                   (name.strip(), session["client_id"]))
+                    return jsonify(success=True)
+                cursor.execute("SELECT bot_name FROM clients WHERE id = %s", (session["client_id"],))
+                row = cursor.fetchone()
+                return jsonify(bot_name=row[0] if row else None, phone_number=None,
+                               status=None, capacity_max_mb=None, capacity_used_mb=None)
+    except psycopg2.Error:
+        app.logger.exception("Gagal mengakses profil bot")
+        return jsonify(error="Profil bot tidak tersedia. Semak migrasi pangkalan data."), 503
+
+
+@app.get("/api/token-usage")
+def token_usage():
+    if not authenticated():
+        return jsonify(error="Sila log masuk dahulu."), 401
+    return jsonify(error="Data token AI, token chat dan penggunaan harian belum tersedia."), 503
+
+
+@app.post("/api/profile/logo")
+def upload_logo():
+    if not authenticated():
+        return jsonify(error="Sila log masuk dahulu."), 401
+    return jsonify(error="Storan logo belum dikonfigurasi."), 503
+
+
+@app.post("/api/profile/company")
+def update_company():
+    if not authenticated():
+        return jsonify(error="Sila log masuk dahulu."), 401
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(error="JSON tidak sah."), 400
+    name, email = data.get("display_name"), data.get("email")
+    if (not isinstance(name, str) or not name.strip() or len(name.strip()) > 150 or
+            not isinstance(email, str) or len(email) > 254 or
+            not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email)):
+        return jsonify(error="Nama syarikat atau e-mel tidak sah."), 400
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        return jsonify(error="Pangkalan data belum dikonfigurasi."), 503
+    try:
+        with psycopg2.connect(url, connect_timeout=5) as conn:
+            with conn.cursor() as cursor:
+                if tenant_id(cursor) != session["client_id"]:
+                    return jsonify(error="Rekod klien tidak tersedia."), 503
+                cursor.execute("UPDATE clients SET display_name = %s, email = %s WHERE id = %s",
+                               (name.strip(), email, session["client_id"]))
+                return jsonify(success=True)
+    except psycopg2.Error:
+        app.logger.exception("Gagal mengemas kini profil syarikat")
+        return jsonify(error="Profil syarikat tidak tersedia. Semak migrasi pangkalan data."), 503
+
+
+@app.get("/api/subscription")
+def subscription():
+    if not authenticated():
+        return jsonify(error="Sila log masuk dahulu."), 401
+    return jsonify(error="Data langganan belum tersedia."), 503
+
+
 @app.post("/api/contacts")
 def save_contact():
-    if not configured() or not session.get("authenticated"):
+    if not authenticated():
         return jsonify(error="Sila log masuk dahulu."), 401
     data = request.get_json(silent=True) or {}
     phone = str(data.get("phone", "")).strip()
@@ -105,7 +206,7 @@ def save_contact():
 @app.get("/api/analytics")
 def analytics():
     """Read-only WhatsApp activity derived from this tenant's stored messages."""
-    if not configured() or not session.get("authenticated"):
+    if not authenticated():
         return jsonify(error="Sila log masuk dahulu."), 401
     url = os.environ.get("DATABASE_URL")
     if not url:
@@ -159,7 +260,7 @@ def analytics():
 
 @app.get("/api/chat-ticket")
 def chat_ticket():
-    if not configured() or not session.get("authenticated"):
+    if not authenticated():
         return jsonify(error="Sila log masuk dahulu."), 401
     secret = os.environ.get("CHAT_SOCKET_SECRET", "")
     endpoint = os.environ.get("CHAT_SOCKET_URL", "")
@@ -172,7 +273,7 @@ def chat_ticket():
 
 @app.get("/api/leads")
 def leads():
-    if not configured() or not session.get("authenticated"):
+    if not authenticated():
         return jsonify(error="Sila log masuk dahulu."), 401
     url = os.environ.get("DATABASE_URL")
     if not url:
@@ -201,7 +302,7 @@ def leads():
 
 @app.get("/api/history")
 def history():
-    if not configured() or not session.get("authenticated"):
+    if not authenticated():
         return jsonify(error="Sila log masuk dahulu."), 401
     phone = request.args.get("phone", "")
     if not phone or len(phone) > 50 or not phone.lstrip("+").isdigit():

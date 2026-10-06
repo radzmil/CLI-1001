@@ -16,6 +16,14 @@ class PortalTest(unittest.TestCase):
     def tearDown(self):
         self.env.stop()
 
+    def login(self, password="test-only", username="architechsystems", client_id=42):
+        cursor = MagicMock()
+        cursor.fetchone.return_value = (client_id,) if client_id is not None else None
+        connection = MagicMock()
+        connection.__enter__.return_value.cursor.return_value.__enter__.return_value = cursor
+        with patch.object(portal.psycopg2, "connect", return_value=connection):
+            return self.client.post("/login", data={"username": username, "password": password})
+
     def test_login_required(self):
         self.assertEqual(self.client.get("/api/analytics").status_code, 401)
         self.assertEqual(self.client.get("/api/chat-ticket").status_code, 401)
@@ -24,29 +32,74 @@ class PortalTest(unittest.TestCase):
         self.assertEqual(self.client.get("/").status_code, 200)
         self.assertNotIn(b"/api/leads", self.client.get("/").data)
 
-    def test_dashboard_has_analytics_and_whatsapp_lead_navigation(self):
-        self.client.post("/login", data={"password": "test-only"})
+    def test_dashboard_has_categorized_navigation_and_panels(self):
+        self.login()
         html = self.client.get("/").data.decode("utf-8")
-        self.assertIn('href="#analytics"', html)
-        self.assertIn('href="#whatsapp-leads"', html)
+        for tab in ('control-center', 'phonebook', 'bot-profile', 'token-usage', 'settings'):
+            self.assertIn('href="#' + tab + '"', html)
+            self.assertIn('id="tab-' + tab + '"', html)
+        for category in ('WORKSPACE', 'BOT &amp; AI', 'AKAUN'):
+            self.assertIn(category, html)
+        self.assertIn('id="contact-form"', html)
         self.assertIn('id="analytics"', html)
         self.assertIn('id="whatsapp-leads"', html)
         self.assertIn('id="metric-prospects"', html)
         self.assertIn('id="top-leads"', html)
+        self.assertIn('class="stats-grid"', html)
+        self.assertIn('class="two-column"', html)
+        self.assertIn('class="status-footer card"', html)
+        self.assertIn('id="daily-activity"', html)
+        self.assertIn('Data penggunaan token belum tersedia', html)
+        self.assertIn('id="user-dropdown" hidden', html)
+        self.assertIn('aria-controls="user-dropdown"', html)
+        for target in ('company-profile', 'password-settings', 'subscription-settings'):
+            self.assertIn('id="' + target + '"', html)
+            self.assertIn('data-profile-target="' + target + '"', html)
+        self.assertIn('method="post" action="/logout"', html)
+        self.assertNotIn('href="/logout"', html)
+        self.assertIn('id="bot-profile-form"', html)
+        self.assertIn('name="bot_name"', html)
+        self.assertIn('id="bot-phone"', html)
+        self.assertIn('aria-valuetext="Data kapasiti belum tersedia"', html)
+        self.assertIn('<button type="submit" disabled>Simpan Perubahan</button>', html)
+        self.assertNotIn('Terhubung ke Meta API', html)
+        self.assertIn('class="token-grid"', html)
+        self.assertIn('aria-label="Token AI"', html)
+        self.assertIn('aria-label="Token Chat Meta"', html)
+        self.assertIn('id="daily-usage-status"', html)
+        self.assertIn('id="usage-log"', html)
+        self.assertIn('Log penggunaan token belum tersedia.', html)
+        for form in ('company-form', 'password-form'):
+            self.assertIn('id="' + form + '"', html)
+        for field in ('logo', 'display_name', 'email', 'current_password', 'new_password', 'confirm_password'):
+            self.assertIn('name="' + field + '"', html)
+        self.assertIn('class="logo-preview"', html)
+        self.assertIn('Plan: Belum tersedia', html)
+        self.assertIn('<button type="button" disabled>Upgrade Plan</button>', html)
+        self.assertNotIn('RM 130 / bulan', html)
 
-    def test_default_password_when_not_configured(self):
+    def test_password_must_be_configured(self):
         with patch.dict(os.environ, {"PORTAL_PASSWORD": ""}):
-            self.assertEqual(self.client.post("/login", data={"password": "wrong"}).status_code, 401)
-            self.assertEqual(self.client.post("/login", data={"password": "defaultpass123"}).status_code, 302)
-            self.assertIn(b"Dashboard LeeA", self.client.get("/").data)
+            self.assertEqual(self.login(password="defaultpass123").status_code, 503)
 
     def test_explicit_password_overrides_default(self):
-        self.assertEqual(self.client.post("/login", data={"password": "defaultpass123"}).status_code, 401)
-        self.assertEqual(self.client.post("/login", data={"password": "test-only"}).status_code, 302)
+        self.assertEqual(self.login(password="defaultpass123").status_code, 401)
+        self.assertEqual(self.login(username="architechlaboratory").status_code, 401)
+        self.assertEqual(self.login().status_code, 302)
+        with self.client.session_transaction() as state:
+            self.assertEqual(state["client_id"], 42)
+            self.assertEqual(state["username"], "architechsystems")
+
+    def test_missing_tenant_and_failed_relogin_do_not_grant_access(self):
+        self.assertEqual(self.login(client_id=None).status_code, 503)
+        self.assertEqual(self.client.get("/api/leads").status_code, 401)
+        self.assertEqual(self.login().status_code, 302)
+        self.assertEqual(self.login(password="wrong").status_code, 401)
+        self.assertEqual(self.client.get("/api/leads").status_code, 401)
 
     def test_login_and_tenant_scoped_queries(self):
-        self.assertEqual(self.client.post("/login", data={"password": "bad"}).status_code, 401)
-        self.assertEqual(self.client.post("/login", data={"password": "test-only"}).status_code, 302)
+        self.assertEqual(self.login(password="bad").status_code, 401)
+        self.assertEqual(self.login().status_code, 302)
         cursor = MagicMock()
         cursor.fetchone.return_value = (42,)
         cursor.fetchall.side_effect = [[("60123456789", "Ali", "manual")], [("60123456789", "Hai", None)]]
@@ -64,7 +117,7 @@ class PortalTest(unittest.TestCase):
         self.assertEqual(self.client.get("/api/leads").status_code, 401)
 
     def test_whatsapp_bot_reply_visible_after_refresh(self):
-        self.client.post("/login", data={"password": "test-only"})
+        self.login()
         cursor = MagicMock()
         cursor.fetchone.return_value = (42,)
         cursor.fetchall.side_effect = [
@@ -81,7 +134,7 @@ class PortalTest(unittest.TestCase):
         self.assertEqual(history[1]["text"], "Salam!")
 
     def test_analytics_uses_tenant_messages_not_sample_data(self):
-        self.client.post("/login", data={"password": "test-only"})
+        self.login()
         now = datetime.now(timezone.utc)
         cursor = MagicMock()
         cursor.fetchone.return_value = (42,)
@@ -104,14 +157,14 @@ class PortalTest(unittest.TestCase):
         self.assertEqual(cursor.execute.call_args_list[1].args[1], (42,))
 
     def test_analytics_missing_database(self):
-        self.client.post("/login", data={"password": "test-only"})
+        self.login()
         with patch.dict(os.environ, {"DATABASE_URL": ""}):
             self.assertEqual(self.client.get("/api/analytics").status_code, 503)
 
     def test_manual_phone_book_is_authenticated_and_tenant_scoped(self):
         payload = {"phone": "60123456789", "name": "Ali"}
         self.assertEqual(self.client.post("/api/contacts", json=payload).status_code, 401)
-        self.client.post("/login", data={"password": "test-only"})
+        self.login()
         self.assertEqual(self.client.post("/api/contacts", json={**payload, "name": " "}).status_code, 400)
         self.assertEqual(self.client.post("/api/contacts", json={**payload, "name": "x" * 151}).status_code, 400)
         cursor = MagicMock()
@@ -126,7 +179,7 @@ class PortalTest(unittest.TestCase):
         self.assertEqual(cursor.execute.call_args_list[2].args[1], (42, "60123456789", "Ali"))
 
     def test_ticket_requires_login_and_configuration(self):
-        self.client.post("/login", data={"password": "test-only"})
+        self.login()
         self.assertEqual(self.client.get("/api/chat-ticket").status_code, 503)
         with patch.dict(os.environ, {"CHAT_SOCKET_SECRET": "x" * 40,
                                   "CHAT_SOCKET_URL": "wss://bot.example/ws/chat"}):
@@ -136,13 +189,40 @@ class PortalTest(unittest.TestCase):
             self.assertTrue(result.json["ticket"])
 
     def test_local_socket_requires_explicit_local_mode(self):
-        self.client.post("/login", data={"password": "test-only"})
+        self.login()
         settings = {"CHAT_SOCKET_SECRET": "x" * 40,
                     "CHAT_SOCKET_URL": "ws://127.0.0.1:5000/ws/chat"}
         with patch.dict(os.environ, settings):
             self.assertEqual(self.client.get("/api/chat-ticket").status_code, 503)
         with patch.dict(os.environ, {**settings, "LOCAL_HTTP": "1"}):
             self.assertEqual(self.client.get("/api/chat-ticket").status_code, 200)
+
+    def test_new_profile_endpoints_require_login_and_do_not_invent_data(self):
+        for path in ("/api/bot-profile", "/api/token-usage", "/api/subscription"):
+            self.assertEqual(self.client.get(path).status_code, 401)
+        for path in ("/api/bot-profile", "/api/profile/company", "/api/profile/logo"):
+            self.assertEqual(self.client.post(path, json={}).status_code, 401)
+        self.login()
+        for path in ("/api/token-usage", "/api/subscription"):
+            self.assertEqual(self.client.get(path).status_code, 503)
+        self.assertEqual(self.client.post("/api/profile/logo").status_code, 503)
+        self.assertEqual(self.client.post("/api/bot-profile", json={"bot_name": " "}).status_code, 400)
+        self.assertEqual(self.client.post("/api/profile/company", json={"display_name": "X", "email": "bad"}).status_code, 400)
+
+    def test_profile_writes_are_tenant_scoped(self):
+        self.login()
+        cursor = MagicMock()
+        cursor.fetchone.side_effect = [(42,), ("LeeA",), (42,), (42,)]
+        connection = MagicMock()
+        connection.__enter__.return_value.cursor.return_value.__enter__.return_value = cursor
+        with patch.object(portal.psycopg2, "connect", return_value=connection):
+            result = self.client.get("/api/bot-profile")
+            self.assertEqual(result.json["bot_name"], "LeeA")
+            self.assertIsNone(result.json["capacity_used_mb"])
+            self.assertTrue(self.client.post("/api/bot-profile", json={"bot_name": "Bot Baru"}).json["success"])
+            self.assertTrue(self.client.post("/api/profile/company", json={"display_name": "Firma", "email": "a@example.com"}).json["success"])
+        self.assertEqual(cursor.execute.call_args_list[3].args[1], ("Bot Baru", 42))
+        self.assertEqual(cursor.execute.call_args_list[5].args[1], ("Firma", "a@example.com", 42))
 
 
 if __name__ == "__main__":
