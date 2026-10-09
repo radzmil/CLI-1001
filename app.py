@@ -5,7 +5,8 @@ from datetime import datetime, timedelta, timezone
 import re
 
 import psycopg2
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for, Response
+from werkzeug.security import check_password_hash, generate_password_hash
 from chat_ticket import issue
 
 app = Flask(__name__)
@@ -57,11 +58,7 @@ def login():
     session.clear()
     if not configured():
         return render_template("login.html", error="Konfigurasi keselamatan portal belum lengkap.", **client_context()), 503
-    password = os.environ.get("PORTAL_PASSWORD", "")
-    if not password:
-        return render_template("login.html", error="Kata laluan portal belum dikonfigurasi.", **client_context()), 503
-    if (request.form.get("username", "").strip() != TENANT or
-            not hmac.compare_digest(request.form.get("password", ""), password)):
+    if request.form.get("username", "").strip() != TENANT:
         return render_template("login.html", error="Maklumat log masuk tidak tepat.", **client_context()), 401
     url = os.environ.get("DATABASE_URL")
     if not url:
@@ -70,11 +67,21 @@ def login():
         with psycopg2.connect(url, connect_timeout=5) as conn:
             with conn.cursor() as cursor:
                 client_id = tenant_id(cursor)
+                cursor.execute("SELECT portal_password_hash FROM clients WHERE id = %s AND username = %s",
+                               (client_id, TENANT))
+                row = cursor.fetchone()
     except psycopg2.Error:
         app.logger.exception("Gagal mengesahkan tenant portal")
         return render_template("login.html", error="Pangkalan data tidak tersedia.", **client_context()), 503
     if client_id is None:
         return render_template("login.html", error="Rekod klien tidak tersedia.", **client_context()), 503
+    stored = row[0] if row else None
+    supplied = request.form.get("password", "")
+    valid = (check_password_hash(stored, supplied) if stored else
+             bool(os.environ.get("PORTAL_PASSWORD")) and
+             hmac.compare_digest(supplied, os.environ["PORTAL_PASSWORD"]))
+    if not valid:
+        return render_template("login.html", error="Maklumat log masuk tidak tepat.", **client_context()), 401
     session.clear()
     session["authenticated"] = True
     session["client_id"] = client_id
@@ -120,10 +127,13 @@ def bot_profile():
                     cursor.execute("UPDATE clients SET bot_name = %s WHERE id = %s",
                                    (name.strip(), session["client_id"]))
                     return jsonify(success=True)
-                cursor.execute("SELECT bot_name FROM clients WHERE id = %s", (session["client_id"],))
+                cursor.execute("SELECT bot_name, bot_status, display_name FROM clients WHERE id = %s AND username = %s",
+                               (session["client_id"], TENANT))
                 row = cursor.fetchone()
-                return jsonify(bot_name=row[0] if row else None, phone_number=None,
-                               status=None, capacity_max_mb=None, capacity_used_mb=None)
+                if row is None:
+                    return jsonify(error="Rekod klien tidak tersedia."), 404
+                return jsonify(bot_name=row[0], status=row[1], display_name=row[2],
+                               phone_number=None, storage_used_mb=None, storage_max_mb=None)
     except psycopg2.Error:
         app.logger.exception("Gagal mengakses profil bot")
         return jsonify(error="Profil bot tidak tersedia. Semak migrasi pangkalan data."), 503
@@ -133,14 +143,116 @@ def bot_profile():
 def token_usage():
     if not authenticated():
         return jsonify(error="Sila log masuk dahulu."), 401
-    return jsonify(error="Data token AI, token chat dan penggunaan harian belum tersedia."), 503
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        return jsonify(error="Pangkalan data belum dikonfigurasi."), 503
+    try:
+        with psycopg2.connect(url, connect_timeout=5) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT ai_token_balance, ai_token_quota, meta_token_balance, "
+                               "meta_token_quota, subscription_end FROM clients "
+                               "WHERE id = %s AND username = %s", (session["client_id"], TENANT))
+                row = cursor.fetchone()
+        if row is None:
+            return jsonify(error="Rekod klien tidak tersedia."), 404
+        def quota_info(balance, quota):
+            used = max(0, quota - balance) if balance is not None and quota is not None else None
+            percent = round(balance / quota * 100, 1) if balance is not None and quota and quota > 0 else None
+            return dict(balance=balance, quota=quota, used=used, percent=percent)
+        return jsonify(ai=quota_info(row[0], row[1]), meta=quota_info(row[2], row[3]),
+                       renewal_date=row[4].isoformat() if row[4] else None)
+    except psycopg2.Error:
+        app.logger.exception("Gagal membaca penggunaan token")
+        return jsonify(error="Penggunaan token tidak tersedia."), 503
 
 
 @app.post("/api/profile/logo")
 def upload_logo():
     if not authenticated():
         return jsonify(error="Sila log masuk dahulu."), 401
-    return jsonify(error="Storan logo belum dikonfigurasi."), 503
+    image = request.files.get("logo")
+    if not image or image.mimetype not in ("image/png", "image/jpeg", "image/webp", "image/gif"):
+        return jsonify(error="Pilih imej PNG, JPEG, WebP atau GIF."), 400
+    data = image.read(2 * 1024 * 1024 + 1)
+    signatures = {"image/png": data.startswith(b"\x89PNG\r\n\x1a\n"),
+                  "image/jpeg": data.startswith(b"\xff\xd8\xff"),
+                  "image/webp": data.startswith(b"RIFF") and data[8:12] == b"WEBP",
+                  "image/gif": data.startswith((b"GIF87a", b"GIF89a"))}
+    if not data or len(data) > 2 * 1024 * 1024 or not signatures[image.mimetype]:
+        return jsonify(error="Imej tidak sah atau melebihi 2 MB."), 400
+    try:
+        with psycopg2.connect(os.environ["DATABASE_URL"], connect_timeout=5) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("UPDATE clients SET logo_data = %s, logo_mime = %s WHERE id = %s AND username = %s",
+                               (psycopg2.Binary(data), image.mimetype, session["client_id"], TENANT))
+                if cursor.rowcount != 1:
+                    return jsonify(error="Rekod klien tidak tersedia."), 404
+        return jsonify(success=True, logo_url="/api/profile/logo")
+    except (psycopg2.Error, KeyError):
+        app.logger.exception("Gagal menyimpan logo")
+        return jsonify(error="Storan logo tidak tersedia."), 503
+
+
+@app.get("/api/profile/logo")
+def get_logo():
+    if not authenticated():
+        return jsonify(error="Sila log masuk dahulu."), 401
+    try:
+        with psycopg2.connect(os.environ["DATABASE_URL"], connect_timeout=5) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT logo_data, logo_mime FROM clients WHERE id = %s AND username = %s",
+                               (session["client_id"], TENANT))
+                row = cursor.fetchone()
+        if not row or not row[0]:
+            return jsonify(error="Logo belum tersedia."), 404
+        return Response(bytes(row[0]), mimetype=row[1])
+    except (psycopg2.Error, KeyError):
+        return jsonify(error="Logo tidak tersedia."), 503
+
+
+@app.get("/api/profile/company")
+def company_profile():
+    if not authenticated():
+        return jsonify(error="Sila log masuk dahulu."), 401
+    try:
+        with psycopg2.connect(os.environ["DATABASE_URL"], connect_timeout=5) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT display_name, email, logo_data FROM clients WHERE id = %s AND username = %s",
+                               (session["client_id"], TENANT))
+                row = cursor.fetchone()
+        if not row:
+            return jsonify(error="Rekod klien tidak tersedia."), 404
+        return jsonify(display_name=row[0] or client_context()["client_name"], email=row[1] or "",
+                       logo_url="/api/profile/logo" if row[2] else client_context()["client_logo"])
+    except (psycopg2.Error, KeyError):
+        return jsonify(error="Profil syarikat tidak tersedia."), 503
+
+
+@app.post("/api/profile/password")
+def change_password():
+    if not authenticated():
+        return jsonify(error="Sila log masuk dahulu."), 401
+    data = request.get_json(silent=True) or {}
+    current, new = data.get("current_password"), data.get("new_password")
+    if not isinstance(current, str) or not isinstance(new, str) or len(new) < 12 or len(new) > 256 or new != data.get("confirm_password"):
+        return jsonify(error="Kata laluan baharu mesti 12–256 aksara dan pengesahan mesti sepadan."), 400
+    try:
+        with psycopg2.connect(os.environ["DATABASE_URL"], connect_timeout=5) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT portal_password_hash FROM clients WHERE id = %s AND username = %s FOR UPDATE",
+                               (session["client_id"], TENANT))
+                row = cursor.fetchone()
+                if not row:
+                    return jsonify(error="Rekod klien tidak tersedia."), 404
+                valid = (check_password_hash(row[0], current) if row[0] else
+                         bool(os.environ.get("PORTAL_PASSWORD")) and hmac.compare_digest(current, os.environ["PORTAL_PASSWORD"]))
+                if not valid:
+                    return jsonify(error="Kata laluan semasa tidak tepat."), 400
+                cursor.execute("UPDATE clients SET portal_password_hash = %s WHERE id = %s AND username = %s",
+                               (generate_password_hash(new), session["client_id"], TENANT))
+        return jsonify(success=True)
+    except (psycopg2.Error, KeyError):
+        return jsonify(error="Kata laluan tidak dapat disimpan."), 503
 
 
 @app.post("/api/profile/company")
@@ -163,8 +275,8 @@ def update_company():
             with conn.cursor() as cursor:
                 if tenant_id(cursor) != session["client_id"]:
                     return jsonify(error="Rekod klien tidak tersedia."), 503
-                cursor.execute("UPDATE clients SET display_name = %s, email = %s WHERE id = %s",
-                               (name.strip(), email, session["client_id"]))
+                cursor.execute("UPDATE clients SET display_name = %s, email = %s WHERE id = %s AND username = %s",
+                               (name.strip(), email, session["client_id"], TENANT))
                 return jsonify(success=True)
     except psycopg2.Error:
         app.logger.exception("Gagal mengemas kini profil syarikat")
@@ -175,7 +287,23 @@ def update_company():
 def subscription():
     if not authenticated():
         return jsonify(error="Sila log masuk dahulu."), 401
-    return jsonify(error="Data langganan belum tersedia."), 503
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        return jsonify(error="Pangkalan data belum dikonfigurasi."), 503
+    try:
+        with psycopg2.connect(url, connect_timeout=5) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT plan, subscription_end, subscription_status, ai_token_quota "
+                               "FROM clients WHERE id = %s AND username = %s",
+                               (session["client_id"], TENANT))
+                row = cursor.fetchone()
+        if row is None:
+            return jsonify(error="Rekod klien tidak tersedia."), 404
+        return jsonify(plan=row[0], renewal_date=row[1].isoformat() if row[1] else None,
+                       status=row[2], token_quota=row[3], price_rm=None, start_date=None)
+    except psycopg2.Error:
+        app.logger.exception("Gagal membaca langganan")
+        return jsonify(error="Langganan tidak tersedia."), 503
 
 
 @app.post("/api/contacts")

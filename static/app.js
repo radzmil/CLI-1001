@@ -68,6 +68,9 @@ function activateTab() {
   if (active === 'control-center') refresh();
   if (active === 'phonebook') renderContacts();
   if (active === 'token-usage') loadTokenMessageActivity();
+  if (active === 'token-usage') loadTokenUsage();
+  if (active === 'settings') { loadSubscription(); loadCompany(); }
+  if (active === 'bot-profile') loadBotProfile();
 }
 window.addEventListener('hashchange', activateTab);
 let leads = [], selected = '', refreshing = false;
@@ -86,6 +89,113 @@ async function api(url) {
   if (!response.ok) throw new Error(data.error || 'Permintaan gagal.');
   return data;
 }
+function display(value) { return value == null ? '—' : String(value); }
+async function postProfile(url, body) {
+  const response = await fetch(url, {method: 'POST', credentials: 'same-origin', body,
+    headers: body instanceof FormData ? {} : {'Content-Type': 'application/json'}});
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Gagal menyimpan.');
+  return data;
+}
+function setLogo(url) {
+  document.querySelectorAll('.company-logo, .dropdown-logo, .logo-preview').forEach(img => {
+    img.src = url.startsWith('/api/profile/logo') ? url + '?v=' + Date.now() : url;
+  });
+}
+async function loadCompany() {
+  try {
+    const data = await api('/api/profile/company');
+    $('company-name').value = data.display_name;
+    $('company-email').value = data.email;
+    setLogo(data.logo_url);
+  } catch (error) { $('company-feedback').textContent = error.message; }
+}
+$('company-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  $('company-feedback').textContent = 'Menyimpan...';
+  try {
+    await postProfile('/api/profile/company', JSON.stringify({display_name: $('company-name').value, email: $('company-email').value}));
+    const file = $('company-logo').files[0];
+    if (file) {
+      const body = new FormData();
+      body.append('logo', file);
+      await postProfile('/api/profile/logo', body);
+      $('company-logo').value = '';
+    }
+    await loadCompany();
+    document.querySelectorAll('.sidebar-brand h2, .dropdown-header strong').forEach(el => { el.textContent = $('company-name').value; });
+    document.querySelector('.dropdown-header small').textContent = $('company-email').value;
+    $('company-feedback').textContent = 'Profil berjaya disimpan.';
+  } catch (error) { $('company-feedback').textContent = error.message; }
+  finally { button.disabled = false; }
+});
+$('password-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  if ($('new-password').value !== $('confirm-password').value) {
+    $('password-feedback').textContent = 'Pengesahan kata laluan tidak sepadan.';
+    return;
+  }
+  button.disabled = true;
+  try {
+    await postProfile('/api/profile/password', JSON.stringify({current_password: $('current-password').value,
+      new_password: $('new-password').value, confirm_password: $('confirm-password').value}));
+    form.reset();
+    $('password-feedback').textContent = 'Kata laluan berjaya ditukar. Gunakan kata laluan baharu untuk log masuk seterusnya.';
+  } catch (error) { $('password-feedback').textContent = error.message; }
+  finally { button.disabled = false; }
+});
+async function loadTokenUsage() {
+  try {
+    const data = await api('/api/token-usage');
+    for (const key of ['ai', 'meta']) {
+      const quota = data[key];
+      $(key + '-balance').textContent = display(quota.balance);
+      $(key + '-quota').textContent = display(quota.quota);
+      $(key + '-used').textContent = display(quota.used);
+      $(key + '-progress').style.width = quota.percent == null ? '0%' : Math.max(0, Math.min(100, quota.percent)) + '%';
+    }
+    $('token-renewal').textContent = display(data.renewal_date);
+    $('token-usage-status').textContent = '';
+  } catch (error) { $('token-usage-status').textContent = error.message; }
+}
+async function loadSubscription() {
+  try {
+    const data = await api('/api/subscription');
+    $('sub-plan').textContent = display(data.plan);
+    $('sub-status').textContent = display(data.status);
+    $('sub-renewal').textContent = display(data.renewal_date);
+    $('sub-quota').textContent = display(data.token_quota);
+    $('sub-price').textContent = data.price_rm == null ? 'Tidak direkodkan' : 'RM' + data.price_rm + '/bulan';
+    $('subscription-status').textContent = '';
+  } catch (error) { $('subscription-status').textContent = error.message; }
+}
+async function loadBotProfile() {
+  try {
+    const data = await api('/api/bot-profile');
+    $('bot-name').value = data.bot_name || '';
+    $('bot-phone').value = data.phone_number || '';
+    $('bot-status').textContent = display(data.status);
+    $('bot-storage').textContent = data.storage_used_mb == null || data.storage_max_mb == null
+      ? 'Tidak direkodkan' : data.storage_used_mb + ' / ' + data.storage_max_mb + ' MB';
+    $('bot-profile-status').textContent = '';
+  } catch (error) { $('bot-profile-status').textContent = error.message; }
+}
+$('bot-profile-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector('button[type="submit"]');
+  button.disabled = true;
+  $('bot-profile-status').textContent = 'Menyimpan...';
+  try {
+    await postProfile('/api/bot-profile', JSON.stringify({bot_name: $('bot-name').value.trim()}));
+    $('bot-profile-status').textContent = 'Nama bot berjaya disimpan.';
+  } catch (error) { $('bot-profile-status').textContent = error.message; }
+  finally { button.disabled = false; }
+});
 function renderLeads() {
   const box = $('leads'); box.replaceChildren();
   const matches = leads.filter(lead => (lead.phone + ' ' + lead.name).toLowerCase().includes($('search').value.trim().toLowerCase()));
